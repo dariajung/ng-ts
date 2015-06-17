@@ -1,0 +1,12 @@
+{
+  "name": "ng-ts",
+  "version": "0.0.1",
+  "description": "N/A",
+  "repository": "https://github.com/dariajung/ng-ts",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "typescript": ">=1.5.0-alpha"
+    , "gulp": ">=3.9.0"
+    , "shrinkwrap": "latest"
+  }
+}
