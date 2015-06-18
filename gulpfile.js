@@ -22,7 +22,6 @@ gulp.task('lint', function () {
 gulp.task('compile', function () {
     var sourceTsFiles = [config.allTypeScript,                //path to typescript files
                          config.libraryTypeScriptDefinitions]; //reference to library .d.ts files
-    console.log(sourceTsFiles);
 
     var tsResult = gulp.src(sourceTsFiles)
                        .pipe(sourcemaps.init())
@@ -32,8 +31,6 @@ gulp.task('compile', function () {
                            noExternalResolve: true,
                            module: "commonjs"
                        }));
-
-    console.log(tsResult);
 
         tsResult.dts.pipe(gulp.dest(config.tsOutputPath));
         return tsResult.js
