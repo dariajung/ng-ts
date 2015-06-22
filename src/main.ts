@@ -5,21 +5,18 @@ import ts = require('typescript');
 import fs = require('fs'); // filesystem module
 import util = require('util');
 import path = require('path');
-//import process = require('process');
 
-// export const COMPILER_OPTIONS: ts.CompilerOptions = {
-// 	allowNonTsExtensions: true,
-// 	module: ts.ModuleKind.CommonJS,
-// 	target: ts.ScriptTarget.ES5,
-// };
+var HashMap = require('hashmap');
 
 /* TranspilerOptions Class will go here */
-
 
 /* The Transpiler Class */
 export class Transpiler {
 	private output: string; // for now, what is an output object?
 	private currentFile: ts.SourceFile;
+
+	map = new HashMap();
+	nodes: ts.Node[] = [];
 
 	// last comment index?
 	private errors: string[] = [];
@@ -41,11 +38,11 @@ export class Transpiler {
 	    allDiagnostics.forEach(diagnostic => {
 	        var loc = diagnostic.file.getLineAndCharacterOfPosition(diagnostic.start);
 	        var message = ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n');
-	        console.log(`${diagnostic.file.fileName} (${loc.line + 1},${loc.character + 1}): ${message}`);
+	        console.log('${diagnostic.file.fileName} (${loc.line + 1},${loc.character + 1}): ${message}');
 	    });
 
 	    var exitCode = emitResult.emitSkipped ? 1 : 0;
-	    console.log(`Process exiting with code '${exitCode}'.`);
+	    console.log("Process exiting with code '${exitCode}'.");
 	    process.exit(exitCode);
 	}
 
@@ -56,12 +53,8 @@ export class Transpiler {
 		});
 	}
 
-	transform() {
-
-	}
-
 	// return set options for the compiler
-	private getCompilerOptions(): ts.CompilerOptions {
+	getCompilerOptions(): ts.CompilerOptions {
 		const options: ts.CompilerOptions = {
 			allowNonTsExtensions: true,
 			module: ts.ModuleKind.CommonJS,
@@ -86,15 +79,20 @@ export class Transpiler {
 			});
 		});
 
+		//console.log(process.cwd());
+
 		// the methods of a compiler host object
 		return {
 			getSourceFile: (sourceName, languageVersion) => {
-				console.log('does this occur');
 				if (fileMap.hasOwnProperty(sourceName)) {
 					console.log('hello?');
+					console.log(sourceName);
 					var contents = fs.readFileSync(sourceName, 'UTF-8');
+					console.log("==========================================================");
 					console.log(contents);
-					return ts.createSourceFile(sourceName, contents, this.getCompilerOptions().target, true);
+					console.log("==========================================================");
+					return ts.createSourceFile(sourceName, contents, 
+							this.getCompilerOptions().target, true);
 				} 
 				if (sourceName === "lib.d.ts")
 					return ts.createSourceFile(sourceName, '', this.getCompilerOptions().target, true);
@@ -111,10 +109,77 @@ export class Transpiler {
 			getNewLine: function() { return "\n"; }
 		};
 	}
+
+	/* For later? Do I even need this though. */
+	prettyPrint() {
+	}
+
+	/* Walk the AST of the program */
+	walk(sourcefile: ts.SourceFile, program: ts.Program) {
+		var typeChecker = program.getTypeChecker();
+
+		//console.log(typeChecker.getTypeAtLocation(sourcefile));
+
+		traverse(sourcefile, typeChecker);
+
+		function traverse(node: ts.Node, typeChecker, count?: number) {
+
+			switch (node.kind) {
+				case ts.SyntaxKind.PropertyAssignment:
+					console.log('PropertyAssignment');
+					break;
+				case ts.SyntaxKind.PropertyDeclaration:
+					console.log('PropertyDeclaration');
+					break;
+				case ts.SyntaxKind.ShorthandPropertyAssignment:
+					console.log('ShorthandPropertyAssignment');
+					break;
+				case ts.SyntaxKind.BinaryExpression:
+					//console.log('BinaryExpression');
+					var binExpr = <ts.BinaryExpression>node;
+					//console.log(binExpr);
+					break;
+				case ts.SyntaxKind.Identifier:
+					var ident = <ts.Identifier>node;
+					//console.log(typeChecker.getTypeAtLocation(ident));
+					break;
+				case ts.SyntaxKind.DotToken:
+					console.log("dot token, do nothing");
+					break;
+
+
+				// PAE has: 
+				// 1. expression: LeftHandSideExpression
+				// 2. dotToken: Node
+				// 3. name: Identifier (right hand side of expression)
+				case ts.SyntaxKind.PropertyAccessExpression:
+					var pae = <ts.PropertyAccessExpression>node; // is this casting?
+					console.log('PropertyAccessExpression');
+					console.log("========================================================");
+					console.log(pae);
+
+					console.log(pae.expression.text);
+
+					// this.map.set(pae.expression.text, { });
+					
+					console.log("========================================================");
+					break;
+			}
+			ts.forEachChild(node, function(node) {
+				traverse(node, typeChecker, count);
+			});
+		}
+
+		/* Report information when necessary */
+		function report(node: ts.Node, message: string) {
+			var lc = sourcefile.getLineAndCharacterOfPosition(node.getStart());
+        	console.log('${sourcefile.fileName} (${lc.line + 1},${lc.character + 1}): ${message}');
+		}
+	}
 }
 
 var transpiler = new Transpiler();
-// var host = transpiler.createCompilerHost(['test/hello.ts']);
-// var source = host.getSourceFile('test/hello.ts', ts.ScriptTarget.ES6);
-// console.log(source);
-transpiler.callCompile();
+var host = transpiler.createCompilerHost(['../../test/hello.ts']);
+var source = host.getSourceFile('../../test/hello.ts', ts.ScriptTarget.ES6);
+var program = ts.createProgram(['../../test/hello.ts'], transpiler.getCompilerOptions(), host);
+transpiler.walk(source, program);
