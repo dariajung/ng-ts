@@ -1,5 +1,5 @@
 ///<reference path="../typings/node/node.d.ts"/>
-///<reference path="../typings/typescript.d.ts"/>
+///<reference path="../typings/typescript/typescript.d.ts"/>
 
 import ts = require('typescript');
 import fs = require('fs'); // filesystem module
@@ -65,9 +65,6 @@ export class Transpiler {
 
 	/* Create a Transpiler Class */
 	createCompilerHost(fileNames: string[], options?: ts.CompilerOptions): ts.CompilerHost {
-		console.log("create compiler host");
-		console.log(fileNames);
-
 		// why is this needed? rather, what is the point?
 		var fileMap: { [s: string]: boolean } = {};
 		fileNames.forEach((f) => fileMap[f] = true); // why?
@@ -146,8 +143,6 @@ export class Transpiler {
 				case ts.SyntaxKind.DotToken:
 					console.log("dot token, do nothing");
 					break;
-
-
 				// PAE has: 
 				// 1. expression: LeftHandSideExpression
 				// 2. dotToken: Node
@@ -158,7 +153,11 @@ export class Transpiler {
 					console.log("========================================================");
 					console.log(pae);
 
-					console.log(pae.expression.text);
+					console.log(pae.expression + ": " + typeChecker.typeToString(typeChecker.getTypeAtLocation(pae.expression)));
+					console.log(pae.name + ": " + typeChecker.typeToString(typeChecker.getTypeAtLocation(pae.name)));
+
+					//console.log(pae.expression.text); // doesn't have it but it prints? I don't get it.
+
 
 					// this.map.set(pae.expression.text, { });
 					
@@ -180,6 +179,7 @@ export class Transpiler {
 
 var transpiler = new Transpiler();
 var host = transpiler.createCompilerHost(['../../test/hello.ts']);
+console.log('created compmiler host');
 var source = host.getSourceFile('../../test/hello.ts', ts.ScriptTarget.ES6);
 var program = ts.createProgram(['../../test/hello.ts'], transpiler.getCompilerOptions(), host);
 transpiler.walk(source, program);
