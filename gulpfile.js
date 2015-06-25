@@ -28,10 +28,11 @@ gulp.task('compile', function () {
     var tsResult = gulp.src(sourceTsFiles)
                     .pipe(sourcemaps.init())
                     .pipe(tsc({
-                        target: 'es6',
+                        typescript: require('typescript'),
+                        target: 'es5',
+                        module: 'commonjs',
                         declarationFiles: false,
-                        noExternalResolve: true,
-                        module: "commonjs"
+                        noExternalResolve: true
                     }));
 
     tsResult.dts.pipe(gulp.dest(config.tsOutputPath));
