@@ -5,7 +5,7 @@ class Greeter {
         return "<h1>" + this.name + "says: " + this.greeting + "</h1>";
     }
 };
-var greeter = new Greeter("Hello, world!", 7);
+var greeter: Greeter = new Greeter("Hello, world!", "daria");
 var str = greeter.greet();
 document.body.innerHTML = str;
 

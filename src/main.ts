@@ -38,7 +38,9 @@ export class Transpiler {
 	    allDiagnostics.forEach(diagnostic => {
 	        var loc = diagnostic.file.getLineAndCharacterOfPosition(diagnostic.start);
 	        var message = ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n');
-	        console.log('${diagnostic.file.fileName} (${loc.line + 1},${loc.character + 1}): ${message}');
+	        console.log(
+	        	'${diagnostic.file.fileName} (${loc.line + 1},${loc.character + 1}): ${message}'
+	        );
 	    });
 
 	    var exitCode = emitResult.emitSkipped ? 1 : 0;
@@ -70,11 +72,11 @@ export class Transpiler {
 		fileNames.forEach((f) => fileMap[f] = true); // why?
 
 		// sanity check that given files actually exist
-		fileNames.forEach((fpath) => {
-			fs.exists(fpath, function(exists) {
-				console.log(exists ? "exists" : "nope :(");
-			});
-		});
+		// fileNames.forEach((fpath) => {
+		// 	fs.exists(fpath, function(exists) {
+		// 		console.log(exists ? "exists" : "nope :(");
+		// 	});
+		// });
 
 		//console.log(process.cwd());
 
@@ -153,8 +155,10 @@ export class Transpiler {
 					console.log("========================================================");
 					console.log(pae);
 
-					console.log(pae.expression + ": " + typeChecker.typeToString(typeChecker.getTypeAtLocation(pae.expression)));
-					console.log(pae.name + ": " + typeChecker.typeToString(typeChecker.getTypeAtLocation(pae.name)));
+					//console.log(pae.expression + ": " + typeChecker.typeToString(
+					//	typeChecker.getTypeAtLocation(pae.expression)));
+					//console.log(pae.name + ": " + typeChecker.typeToString(
+					//	typeChecker.getTypeAtLocation(pae.name)));
 
 					//console.log(pae.expression.text); // doesn't have it but it prints? I don't get it.
 
@@ -179,7 +183,9 @@ export class Transpiler {
 
 var transpiler = new Transpiler();
 var host = transpiler.createCompilerHost(['../../test/hello.ts']);
-console.log('created compmiler host');
-var source = host.getSourceFile('../../test/hello.ts', ts.ScriptTarget.ES6);
-var program = ts.createProgram(['../../test/hello.ts'], transpiler.getCompilerOptions(), host);
+console.log('created compiler host');
+var source : ts.SourceFile = host.getSourceFile('../../test/hello.ts', ts.ScriptTarget.ES6);
+
+// to create the program, the host calls getSourceFile IF you pass in a host. It's an optional parameter
+var program : ts.Program = ts.createProgram(['../../test/hello.ts'], transpiler.getCompilerOptions());
 transpiler.walk(source, program);
