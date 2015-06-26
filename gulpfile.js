@@ -60,7 +60,7 @@ gulp.task('default', function () {
         .pipe(mocha({reporter: 'nyan'}));
 });
 
-gulp.task('unit.test', function() {
+gulp.task('unit.test', ['compile'], function() {
   return gulp.src('test/e2e/test.js', {read: false})
   .pipe(mocha({reporter: 'nyan'}));
 });
