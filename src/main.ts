@@ -48,6 +48,7 @@ export class Transpiler {
     process.exit(exitCode);
   }
 
+  /* NoEmitOnError is a bit silly given the current situation */
   callCompile() {
     this.compile(process.argv.slice(2), {
       noEmitOnError: true, noImplicitAny: true,
@@ -226,6 +227,7 @@ export class Transpiler {
     }
     return chars.join('');
   }
+
 }
 
 var transpiler = new Transpiler();
