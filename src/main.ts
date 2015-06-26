@@ -2,11 +2,9 @@
 ///<reference path="../typings/typescript/typescript.d.ts"/>
 
 import ts = require('typescript');
-import fs = require('fs'); // filesystem module
-import util = require('util');
-import path = require('path');
-
-var HashMap = require('hashmap');
+var fs = require('fs'); // filesystem module
+var util = require('util');
+var path = require('path');
 
 /* TranspilerOptions Class will go here */
 
@@ -15,7 +13,10 @@ export class Transpiler {
 	private output: string; // for now, what is an output object?
 	private currentFile: ts.SourceFile;
 
-	map = new HashMap();
+	// initialize to ''
+	lastRename: string = '';
+
+	renameMap = new Map();
 	nodes: ts.Node[] = [];
 
 	// last comment index?
@@ -26,7 +27,6 @@ export class Transpiler {
 
 	constructor() {
 		// will instantiate different transpilers; nothing here yet
-
 	} 
 
 	compile(fileNames: string[], options: ts.CompilerOptions): void {
@@ -118,11 +118,10 @@ export class Transpiler {
 		var typeChecker = program.getTypeChecker();
 
 		//console.log(typeChecker.getTypeAtLocation(sourcefile));
+		var _this = this;
+		traverse(sourcefile, typeChecker, _this.renameMap);
 
-		traverse(sourcefile, typeChecker);
-
-		function traverse(node: ts.Node, typeChecker, count?: number) {
-
+		function traverse(node: ts.Node, typeChecker, renameMap: Map, count?: number) {
 			switch (node.kind) {
 				case ts.SyntaxKind.PropertyAssignment:
 					console.log('PropertyAssignment');
@@ -153,7 +152,23 @@ export class Transpiler {
 					var pae = <ts.PropertyAccessExpression>node; // is this casting?
 					console.log('PropertyAccessExpression');
 					console.log("========================================================");
-					console.log(pae);
+					/* If _.expression.text exists, then it is a top level "name" */
+					if (pae.expression.text) {
+						console.log("PAE_EXPRESSION_TEXT " + pae.expression.text + ": " + pae.name.text);
+						console.log(pae.expression);
+						renameMap.set(pae.expression.text + '.' + pae.name.text, "nothing for now");
+					}	
+
+					// "property" name
+					// if (pae.name) {
+					// 	console.log("PAE_EXPRESSION_NAME ");
+					// 	console.log(pae.name);
+					// }
+					// console.log(pae.expression);
+					// console.log(pae.dotToken);
+					// console.log(pae.name);
+
+					//this.renameMap.set(pae);
 
 					//console.log(pae.expression + ": " + typeChecker.typeToString(
 					//	typeChecker.getTypeAtLocation(pae.expression)));
@@ -168,8 +183,13 @@ export class Transpiler {
 					console.log("========================================================");
 					break;
 			}
+
+			renameMap.forEach(function(value, key, map) {
+			   console.log("Key: %s, Value: %s", key, value);
+			});
+
 			ts.forEachChild(node, function(node) {
-				traverse(node, typeChecker, count);
+				traverse(node, typeChecker, renameMap, count);
 			});
 		}
 
@@ -179,13 +199,40 @@ export class Transpiler {
         	console.log('${sourcefile.fileName} (${lc.line + 1},${lc.character + 1}): ${message}');
 		}
 	}
+
+	// not sure where this should go, transpiler doesn't really make senes?
+	nextChar(c: string): string {
+    	return String.fromCharCode(c.charCodeAt(0) + 1);
+	}
+
+	/* Returns a string for the new property name */
+	/* 0 -> a, 1 -> b, ... 25 -> z, 26 -> aa , ...*/
+	generate_next_lateral_property_name(code: string): string {
+		var chars = code.split('');
+		var len: number = code.length;
+		var last: string = chars[len - 1];
+
+		/* Grab the next letter using nextChar */
+		for (var i = len - 1; i >= 0; i--) {
+			if (chars[i] !== 'z') {
+				chars[i] = this.nextChar(chars[i]);
+				break;
+			} else {
+				chars[i] = 'a';
+				if (i === 0) {
+					return 'a' + chars;				
+				}
+			}
+		}
+		return chars.join('');
+	}
 }
 
 var transpiler = new Transpiler();
-var host = transpiler.createCompilerHost(['../../test/hello.ts']);
-console.log('created compiler host');
-var source : ts.SourceFile = host.getSourceFile('../../test/hello.ts', ts.ScriptTarget.ES6);
+//var host = transpiler.createCompilerHost(['../../test/hello.ts']);
+//console.log('created compiler host');
+//var source : ts.SourceFile = host.getSourceFile('../../test/hello.ts', ts.ScriptTarget.ES6);
 
 // to create the program, the host calls getSourceFile IF you pass in a host. It's an optional parameter
-var program : ts.Program = ts.createProgram(['../../test/hello.ts'], transpiler.getCompilerOptions());
-transpiler.walk(source, program);
+//var program : ts.Program = ts.createProgram(['../../test/hello.ts'], transpiler.getCompilerOptions());
+//transpiler.walk(source, program);
