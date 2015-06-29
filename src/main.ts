@@ -208,6 +208,7 @@ export class Transpiler {
   /* 0 -> a, 1 -> b, ... 25 -> z, 26 -> aa , ...*/
   generate_next_lateral_property_name(code: string): string {
     var chars = code.split('');
+    console.log(chars);
     var len: number = code.length;
     var last: string = chars[len - 1];
 
@@ -219,7 +220,7 @@ export class Transpiler {
       } else {
         chars[i] = 'a';
         if (i === 0) {
-          return 'a' + chars;             
+          return 'a' + (chars.join(''));             
         }
       }
     }
@@ -228,7 +229,7 @@ export class Transpiler {
 
 }
 
-var transpiler = new Transpiler();
+//var transpiler = new Transpiler();
 //var host = transpiler.createCompilerHost(['../../test/hello.ts']);
 //console.log('created compiler host');
 //var source : ts.SourceFile = host.getSourceFile('../../test/hello.ts', ts.ScriptTarget.ES6);
