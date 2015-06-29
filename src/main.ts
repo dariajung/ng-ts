@@ -5,6 +5,7 @@ import ts = require('typescript');
 var fs = require('fs'); // filesystem module
 var util = require('util');
 var path = require('path');
+var Map = require('es6-map');
 
 /* TranspilerOptions Class will go here */
 
@@ -16,7 +17,7 @@ export class Transpiler {
   // initialize to ''
   lastRename: string = '';
 
-  renameMap = new Map();
+  renameMap = new Map(); // ???
   nodes: ts.Node[] = [];
 
   // last comment index?
@@ -78,9 +79,6 @@ export class Transpiler {
     //      console.log(exists ? "exists" : "nope :(");
     //  });
     // });
-
-    //console.log(process.cwd());
-
     // the methods of a compiler host object
     return {
       getSourceFile: (sourceName, languageVersion) => {
@@ -122,7 +120,7 @@ export class Transpiler {
     var _this = this;
     traverse(sourcefile, typeChecker, _this.renameMap);
 
-    function traverse(node: ts.Node, typeChecker, renameMap: Map, count?: number) {
+    function traverse(node: ts.Node, typeChecker, renameMap, count?: number) {
       switch (node.kind) {
         case ts.SyntaxKind.PropertyAssignment:
           console.log('PropertyAssignment');

@@ -13,7 +13,7 @@ var typescript = require('typescript');
 
 var config = new Config();
 var hasError;
-var failOnError = true;
+var failOnError = false;
 
 var onError = function(err) {
   console.log("onError");
@@ -30,7 +30,7 @@ var COMPILER_OPTIONS = {
   declarationFiles: true,
   // noEmitOnError: true - currently not possible because TS doesn't recognize ES6 collections 
   //                       like Map, WeakMap, etc
-  noImplicitAny: true,
+  // noImplicitAny: true,
   typescript: typescript,
 };
 
@@ -62,10 +62,10 @@ gulp.task('compile', function () {
             noExternalResolve: true
           }));
 
-  tsResult.dts.pipe(gulp.dest(config.tsOutputPath));
+  tsResult.dts.pipe(gulp.dest(config.buildOutputPathJS));
   return tsResult.js
           .pipe(sourcemaps.write('.'))
-          .pipe(gulp.dest(config.tsOutputPath));
+          .pipe(gulp.dest(config.buildOutputPathJS));
 });
 
 /**
@@ -74,7 +74,8 @@ gulp.task('compile', function () {
 gulp.task('clean', function (cb) {
   var typeScriptGenFiles = [config.tsOutputPath, // path to generated JS files
               config.sourceApp +'**/*.js',       // path to all JS files auto gen'd by editor
-              config.sourceApp +'**/*.js.map'];  // path to all sourcemap files auto gen'd by editor
+              config.sourceApp +'**/*.js.map',   // path to all sourcemap files auto gen'd by editor
+              config.buildOutputPath];
   // delete the files
   del(typeScriptGenFiles, cb);
 });
@@ -98,7 +99,7 @@ gulp.task('unit.test', ['test.compile'], function() {
 });
 
 gulp.task('watch', function() {
-  gulp.watch([config.allTypeScript], ['compile', 'unit.test']);
+  gulp.watch([config.allTypeScript], ['compile', 'test.compile', 'unit.test']);
 });
 
 gulp.task('default', ['compile', 'unit.test', 'watch']);
