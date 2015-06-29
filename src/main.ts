@@ -14,10 +14,10 @@ export class Transpiler {
   private output: string; // for now, what is an output object?
   private currentFile: ts.SourceFile;
 
-  // initialize to ''
-  lastRename: string = '';
+  /* initialize to '' */
+  prevRename: string = '';
 
-  renameMap = new Map(); // ???
+  renameMap = new Map();
   nodes: ts.Node[] = [];
 
   // last comment index?
@@ -57,7 +57,7 @@ export class Transpiler {
     });
   }
 
-  // return set options for the compiler
+  /* return set options for the compiler */
   getCompilerOptions(): ts.CompilerOptions {
     const options: ts.CompilerOptions = {
       allowNonTsExtensions: true,
@@ -74,12 +74,13 @@ export class Transpiler {
     fileNames.forEach((f) => fileMap[f] = true); // why?
 
     // sanity check that given files actually exist
-    // fileNames.forEach((fpath) => {
-    //  fs.exists(fpath, function(exists) {
-    //      console.log(exists ? "exists" : "nope :(");
-    //  });
-    // });
-    // the methods of a compiler host object
+    fileNames.forEach((fpath) => {
+     fs.exists(fpath, function(exists) {
+         console.log(exists ? "exists" : "nope :(");
+     });
+    });
+
+    /* the methods of a compiler host object */
     return {
       getSourceFile: (sourceName, languageVersion) => {
         if (fileMap.hasOwnProperty(sourceName)) {
@@ -108,25 +109,41 @@ export class Transpiler {
     };
   }
 
-  /* For later? Do I even need this though. */
-  prettyPrint() {
-  }
-
   /* Walk the AST of the program */
   walk(sourcefile: ts.SourceFile, program: ts.Program) {
     var typeChecker = program.getTypeChecker();
 
-    //console.log(typeChecker.getTypeAtLocation(sourcefile));
-    var _this = this;
-    traverse(sourcefile, typeChecker, _this.renameMap);
+    traverse(sourcefile, typeChecker, this.renameMap, 0, '');
 
-    function traverse(node: ts.Node, typeChecker, renameMap, count?: number) {
+    function traverse(node: ts.Node, typeChecker, renameMap, count?: number, parentString?: string) {
+      console.log(node.kind);
+      console.log('pstring: ' + parentString);
       switch (node.kind) {
+        case ts.SyntaxKind.ClassDeclaration:
+          console.log("========================================================");
+          console.log('ClassDeclaration');
+          var classDeclaration = <ts.ClassDeclaration>node;
+          //console.log(classDeclaration);
+          console.log("========================================================");
+          parentString = updateParentString(parentString, classDeclaration.name.text);
+          break;
         case ts.SyntaxKind.PropertyAssignment:
           console.log('PropertyAssignment');
           break;
         case ts.SyntaxKind.PropertyDeclaration:
           console.log('PropertyDeclaration');
+          var pd = <ts.PropertyDeclaration>node;
+          //console.log(pd);
+
+          //console.log(pd.parent.name.text + '.' + pd.name.text);
+          parentString = updateParentString(parentString, pd.name.text);
+
+          // try {
+          //   console.log("TYPECHECKER");
+          //   console.log(typeChecker.typeToString(typeChecker.getTypeAtLocation(pd)));
+          // } catch(error) {
+          //   console.log("TYPECHECKER ERROR " + error.stack);
+          // }
           break;
         case ts.SyntaxKind.ShorthandPropertyAssignment:
           console.log('ShorthandPropertyAssignment');
@@ -137,11 +154,15 @@ export class Transpiler {
           //console.log(binExpr);
           break;
         case ts.SyntaxKind.Identifier:
-          var ident = <ts.Identifier>node;
+          // console.log("========================================================");
+          // console.log('Identifier');
+          // var ident = <ts.Identifier>node;
+          // console.log(ident);
+          // console.log("========================================================");
           //console.log(typeChecker.getTypeAtLocation(ident));
           break;
         case ts.SyntaxKind.DotToken:
-          console.log("dot token, do nothing");
+          //console.log("dot token, do nothing");
           break;
         // PAE has: 
         // 1. expression: LeftHandSideExpression
@@ -149,53 +170,72 @@ export class Transpiler {
         // 3. name: Identifier (right hand side of expression)
         case ts.SyntaxKind.PropertyAccessExpression:
           var pae = <ts.PropertyAccessExpression>node; // is this casting?
+
           console.log('PropertyAccessExpression');
           console.log("========================================================");
-          /* If _.expression.text exists, then it is a top level "name" */
-          if (pae.expression.text) {
-            console.log("PAE_EXPRESSION_TEXT " + pae.expression.text + ": " + pae.name.text);
-            console.log(pae.expression);
-            renameMap.set(pae.expression.text + '.' + pae.name.text, "nothing for now");
-          }   
-
-          // "property" name
-          // if (pae.name) {
-          //  console.log("PAE_EXPRESSION_NAME ");
-          //  console.log(pae.name);
+          
+          /* If _.expression.text exists, then it is top level, everything under it 
+            is a "right hand side" expression  */
+          /* DFS here? */
+          // if (pae.expression.text) {
+          //   console.log(pae);
+          //   parentString = updateParentString(parentString, pae.expression.text);
+          //   console.log(pae.expression.text);
+          //   try {
+          //     console.log("TYPECHECKER");
+          //     console.log(typeChecker.typeToString(typeChecker.getTypeAtLocation(pae)));
+          //   } catch(error) {
+          //     console.log("TYPECHECKER ERROR " + error.stack);
+          //   }
           // }
-          // console.log(pae.expression);
-          // console.log(pae.dotToken);
-          // console.log(pae.name);
 
-          //this.renameMap.set(pae);
+          // pae.name is the right hand side expression
+          if (childrenExist(pae.expression) && pae.name.text) {
+            console.log(pae);
 
-          //console.log(pae.expression + ": " + typeChecker.typeToString(
-          //  typeChecker.getTypeAtLocation(pae.expression)));
-          //console.log(pae.name + ": " + typeChecker.typeToString(
-          //  typeChecker.getTypeAtLocation(pae.name)));
-
-          //console.log(pae.expression.text); // doesn't have it but it prints? I don't get it.
-
-
-          // this.map.set(pae.expression.text, { });
+            // need to traverse all of LHS first
+            parentString = updateParentString(parentString, pae.name.text);
+            console.log(pae.name.text);
+          }
           
           console.log("========================================================");
           break;
       }
 
-      renameMap.forEach(function(value, key, map) {
-         console.log("Key: %s, Value: %s", key, value);
-      });
-
       ts.forEachChild(node, function(node) {
-        traverse(node, typeChecker, renameMap, count);
+        console.log(parentString);
+        traverse(node, typeChecker, renameMap, count, parentString);
       });
     }
+
+    this.renameMap.forEach(function(value, key, map) {
+      console.log("Key: %s, Value: %s", key, value);
+    });
 
     /* Report information when necessary */
     function report(node: ts.Node, message: string) {
       var lc = sourcefile.getLineAndCharacterOfPosition(node.getStart());
       console.log('${sourcefile.fileName} (${lc.line + 1},${lc.character + 1}): ${message}');
+    }
+
+    function updateParentString(p: string, c: string): string {
+      if (p.length === 0) {
+        return c;
+      } else {
+        return p + '$' + c;
+      }
+    }
+
+    /* Need a smarter way to do this */
+    function childrenExist(topNode) {
+      var count = 0;
+      ts.forEachChild(topNode, function(node) {
+        if (node) count++;
+      });
+
+      console.log(count);
+
+      return (count > 0);
     }
   }
 
@@ -206,7 +246,7 @@ export class Transpiler {
 
   /* Returns a string for the new property name */
   /* 0 -> a, 1 -> b, ... 25 -> z, 26 -> aa , ...*/
-  generate_next_lateral_property_name(code: string): string {
+  generateNextLateralPropertyName(code: string): string {
     var chars = code.split('');
     console.log(chars);
     var len: number = code.length;
@@ -225,15 +265,26 @@ export class Transpiler {
       }
     }
     return chars.join('');
-  }
+  }  
 
+  /* Given a key, assign a generated property shortname */
+  assignNewPropertyName(key: string): void {
+    if (this.renameMap.has(key)) {
+      return;
+    } else {
+      var newPropName = this.generateNextLateralPropertyName(this.prevRename);
+      this.renameMap.set(key, newPropName);
+    }
+  }
 }
 
-//var transpiler = new Transpiler();
-//var host = transpiler.createCompilerHost(['../../test/hello.ts']);
+var transpiler = new Transpiler();
+var host = transpiler.createCompilerHost(['../../test/hello.ts']);
 //console.log('created compiler host');
-//var source : ts.SourceFile = host.getSourceFile('../../test/hello.ts', ts.ScriptTarget.ES6);
+var source : ts.SourceFile = host.getSourceFile('../../test/hello.ts', ts.ScriptTarget.ES6);
 
-// to create the program, the host calls getSourceFile IF you pass in a host. It's an optional parameter
-//var program : ts.Program = ts.createProgram(['../../test/hello.ts'], transpiler.getCompilerOptions());
-//transpiler.walk(source, program);
+// to create the program, the host calls getSourceFile 
+// IF you pass in a host. It's an optional parameter
+var program : ts.Program = 
+  ts.createProgram(['../../test/hello.ts'], transpiler.getCompilerOptions());
+transpiler.walk(source, program);
