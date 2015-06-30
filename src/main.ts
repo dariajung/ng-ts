@@ -113,19 +113,19 @@ export class Transpiler {
   walk(sourcefile: ts.SourceFile, program: ts.Program) {
     var typeChecker = program.getTypeChecker();
 
-    traverse(sourcefile, typeChecker, this.renameMap, 0, '');
+    ts.forEachChild(sourcefile, function(node) {
+      traverse(node, typeChecker, this.renameMap, [], '');
+    });
 
-    function traverse(node: ts.Node, typeChecker, renameMap, count?: number, parentString?: string) {
-      console.log(node.kind);
-      console.log('pstring: ' + parentString);
+    function traverse(node: ts.Node, typeChecker, renameMap, parent, pString: string, count?: number) {
       switch (node.kind) {
         case ts.SyntaxKind.ClassDeclaration:
           console.log("========================================================");
           console.log('ClassDeclaration');
           var classDeclaration = <ts.ClassDeclaration>node;
-          //console.log(classDeclaration);
           console.log("========================================================");
-          parentString = updateParentString(parentString, classDeclaration.name.text);
+          parent.push(classDeclaration.name.text);
+          pString = updateParentString(pString, classDeclaration.name.text);
           break;
         case ts.SyntaxKind.PropertyAssignment:
           console.log('PropertyAssignment');
@@ -134,10 +134,9 @@ export class Transpiler {
           console.log('PropertyDeclaration');
           var pd = <ts.PropertyDeclaration>node;
           //console.log(pd);
-
-          //console.log(pd.parent.name.text + '.' + pd.name.text);
-          parentString = updateParentString(parentString, pd.name.text);
-
+          parent.push(pd.name.text);
+          pString = updateParentString(pString, pd.name.text);
+          console.log("MEOW pString: " + pString);
           // try {
           //   console.log("TYPECHECKER");
           //   console.log(typeChecker.typeToString(typeChecker.getTypeAtLocation(pd)));
@@ -149,52 +148,53 @@ export class Transpiler {
           console.log('ShorthandPropertyAssignment');
           break;
         case ts.SyntaxKind.BinaryExpression:
-          //console.log('BinaryExpression');
           var binExpr = <ts.BinaryExpression>node;
-          //console.log(binExpr);
           break;
         case ts.SyntaxKind.Identifier:
-          // console.log("========================================================");
-          // console.log('Identifier');
-          // var ident = <ts.Identifier>node;
-          // console.log(ident);
-          // console.log("========================================================");
-          //console.log(typeChecker.getTypeAtLocation(ident));
           break;
         case ts.SyntaxKind.DotToken:
-          //console.log("dot token, do nothing");
           break;
-        // PAE has: 
-        // 1. expression: LeftHandSideExpression
-        // 2. dotToken: Node
-        // 3. name: Identifier (right hand side of expression)
         case ts.SyntaxKind.PropertyAccessExpression:
           var pae = <ts.PropertyAccessExpression>node; // is this casting?
           var lhs = pae.expression;
 
-          console.log('PropertyAccessExpression');
           console.log("========================================================");
-          
+          console.log('PropertyAccessExpression');
+          // console.log(pae.expression);
+          // console.log("DOT");
+          // console.log(pae.name);
+
           if (lhs.text) {
-            parentString = updateParentString(lhs.text + '$' + pae.name.text, parentString);
-            console.log("what's going on here " + pae.name.text);
+            //parentString = updateParentString(lhs.text + '$' + pae.name.text, parentString);
+            parent.push(pae.name.text);
+            parent.push(lhs.text);
+            pString = updateParentString(lhs.text + '$' + pae.name.text, pString);
+            console.log("MEOW pString: " + pString);
+            //console.log("lhs.text: " + lhs.text);
+            //console.log("pae.name.text: " + pae.name.text);
+          } else if (lhs.expression) {
+            pString = updateParentString(pae.name.text, pString);
           } else {
-            parentString = updateParentString(pae.name.text, parentString);
+            console.log("kitkat");
+            parent.push(pae.name.text);
+            pString = updateParentString(pString, pae.name.text);
+            console.log("MEOW pString: " + pString);
           }
 
           console.log("========================================================");
           break;
       }
 
+      //console.log("MEOW pString: " + pString);
+
       ts.forEachChild(node, function(node) {
-        console.log(parentString);
-        traverse(node, typeChecker, renameMap, count, parentString);
+        traverse(node, typeChecker, renameMap, parent, pString);
       });
     }
 
-    this.renameMap.forEach(function(value, key, map) {
-      console.log("Key: %s, Value: %s", key, value);
-    });
+    // this.renameMap.forEach(function(value, key, map) {
+    //   console.log("Key: %s, Value: %s", key, value);
+    // });
 
     /* Report information when necessary */
     function report(node: ts.Node, message: string) {
@@ -205,6 +205,8 @@ export class Transpiler {
     function updateParentString(p: string, c: string): string {
       if (p.length === 0) {
         return c;
+      } else if (c.length === 0) {
+        return p;
       } else {
         return p + '$' + c;
       }
