@@ -170,34 +170,18 @@ export class Transpiler {
         // 3. name: Identifier (right hand side of expression)
         case ts.SyntaxKind.PropertyAccessExpression:
           var pae = <ts.PropertyAccessExpression>node; // is this casting?
+          var lhs = pae.expression;
 
           console.log('PropertyAccessExpression');
           console.log("========================================================");
           
-          /* If _.expression.text exists, then it is top level, everything under it 
-            is a "right hand side" expression  */
-          /* DFS here? */
-          // if (pae.expression.text) {
-          //   console.log(pae);
-          //   parentString = updateParentString(parentString, pae.expression.text);
-          //   console.log(pae.expression.text);
-          //   try {
-          //     console.log("TYPECHECKER");
-          //     console.log(typeChecker.typeToString(typeChecker.getTypeAtLocation(pae)));
-          //   } catch(error) {
-          //     console.log("TYPECHECKER ERROR " + error.stack);
-          //   }
-          // }
-
-          // pae.name is the right hand side expression
-          if (childrenExist(pae.expression) && pae.name.text) {
-            console.log(pae);
-
-            // need to traverse all of LHS first
-            parentString = updateParentString(parentString, pae.name.text);
-            console.log(pae.name.text);
+          if (lhs.text) {
+            parentString = updateParentString(lhs.text + '$' + pae.name.text, parentString);
+            console.log("what's going on here " + pae.name.text);
+          } else {
+            parentString = updateParentString(pae.name.text, parentString);
           }
-          
+
           console.log("========================================================");
           break;
       }
@@ -223,6 +207,16 @@ export class Transpiler {
         return c;
       } else {
         return p + '$' + c;
+      }
+    }
+
+    function dfs(node) {
+      console.log(node);
+      if (node.expression) {
+        console.log(node.expression);
+        dfs(node.expression);
+      } else {
+        return node;
       }
     }
 
