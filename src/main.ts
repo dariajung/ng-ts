@@ -117,26 +117,22 @@ export class Transpiler {
       traverse(node, typeChecker, this.renameMap, [], '');
     });
 
+    /* Somewhat of a misnomer to refer to pString as "parent" */
     function traverse(node: ts.Node, typeChecker, renameMap, parent, pString: string, count?: number) {
       switch (node.kind) {
         case ts.SyntaxKind.ClassDeclaration:
-          console.log("========================================================");
-          console.log('ClassDeclaration');
           var classDeclaration = <ts.ClassDeclaration>node;
-          console.log("========================================================");
           parent.push(classDeclaration.name.text);
           pString = updateParentString(pString, classDeclaration.name.text);
           break;
         case ts.SyntaxKind.PropertyAssignment:
-          console.log('PropertyAssignment');
           break;
         case ts.SyntaxKind.PropertyDeclaration:
-          console.log('PropertyDeclaration');
           var pd = <ts.PropertyDeclaration>node;
-          //console.log(pd);
           parent.push(pd.name.text);
           pString = updateParentString(pString, pd.name.text);
-          console.log("MEOW pString: " + pString);
+          console.log("TODO ADD TO RENAME MAP: " + pString);
+          // TODO: Add type checking to "top-level" expressions
           // try {
           //   console.log("TYPECHECKER");
           //   console.log(typeChecker.typeToString(typeChecker.getTypeAtLocation(pd)));
@@ -145,56 +141,36 @@ export class Transpiler {
           // }
           break;
         case ts.SyntaxKind.ShorthandPropertyAssignment:
-          console.log('ShorthandPropertyAssignment');
           break;
         case ts.SyntaxKind.BinaryExpression:
-          var binExpr = <ts.BinaryExpression>node;
           break;
         case ts.SyntaxKind.Identifier:
           break;
         case ts.SyntaxKind.DotToken:
           break;
         case ts.SyntaxKind.PropertyAccessExpression:
-          var pae = <ts.PropertyAccessExpression>node; // is this casting?
+          var pae = <ts.PropertyAccessExpression>node;
           var lhs = pae.expression;
 
-          console.log("========================================================");
-          console.log('PropertyAccessExpression');
-          // console.log(pae.expression);
-          // console.log("DOT");
-          // console.log(pae.name);
-
           if (lhs.text) {
-            //parentString = updateParentString(lhs.text + '$' + pae.name.text, parentString);
             parent.push(pae.name.text);
             parent.push(lhs.text);
             pString = updateParentString(lhs.text + '$' + pae.name.text, pString);
-            console.log("MEOW pString: " + pString);
-            //console.log("lhs.text: " + lhs.text);
-            //console.log("pae.name.text: " + pae.name.text);
+            console.log("TODO ADD TO RENAME MAP: " + pString);
           } else if (lhs.expression) {
             pString = updateParentString(pae.name.text, pString);
           } else {
-            console.log("kitkat");
             parent.push(pae.name.text);
             pString = updateParentString(pString, pae.name.text);
-            console.log("MEOW pString: " + pString);
+            console.log("TODO ADD TO RENAME MAP: " + pString);
           }
-
-          console.log("========================================================");
           break;
       }
-
-      //console.log("MEOW pString: " + pString);
 
       ts.forEachChild(node, function(node) {
         traverse(node, typeChecker, renameMap, parent, pString);
       });
     }
-
-    // this.renameMap.forEach(function(value, key, map) {
-    //   console.log("Key: %s, Value: %s", key, value);
-    // });
 
     /* Report information when necessary */
     function report(node: ts.Node, message: string) {
@@ -202,6 +178,7 @@ export class Transpiler {
       console.log('${sourcefile.fileName} (${lc.line + 1},${lc.character + 1}): ${message}');
     }
 
+    /* Concat the 'parent' and 'child' strings */
     function updateParentString(p: string, c: string): string {
       if (p.length === 0) {
         return c;
@@ -212,6 +189,7 @@ export class Transpiler {
       }
     }
 
+    /* TODO: Get rid of */
     function dfs(node) {
       console.log(node);
       if (node.expression) {
@@ -222,7 +200,7 @@ export class Transpiler {
       }
     }
 
-    /* Need a smarter way to do this */
+    /* TODO: Get rid of */
     function childrenExist(topNode) {
       var count = 0;
       ts.forEachChild(topNode, function(node) {
