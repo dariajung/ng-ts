@@ -311,37 +311,28 @@ export class Renamer {
 
   /* Given a key, assign a generated property shortname */
   assignNewPropertyName(propName: string, lhsType: string): void {
+    var prevRename = this.getLastRename(lhsType);
+    var newPropName = this.generateNextLateralPropertyName(prevRename);
+    var value = new PropertyInfo(lhsType, newPropName);
     /* 
-     * This property name exists already. Property names aren't necessarily unique so we need
-     * to add to a list of all possible classes or LHS expressions this property name might 
-     * belong to. This isn't necessarily ideal since we will have to do O(N) lookup for the correct
-     * one when we're doing the actual renaming.
+     * Add the PropertyInfo for the property name in a new list since this property name might
+     * not be unique.
      */
-    if (this.renameMap.has(propName)) {
-      return;
-    /*
-     * This property name does not exist yet. Check if its LHS expression exists.
-     */
-    } else {
-      /* 
-       * If the lhsType hasn't been seen yet, add it to the prevNameMap.
-       */
-      if (!prevNameMap.get(lhsType)) {
-        this.addNewLHSExpression(lhsType);
-      }
-      var prevRename = this.prevNameMap.get(lhsType);
-      var newPropName = this.generateNextLateralPropertyName(prevRename);
-      var value = new PropertyInfo(lhsType, newPropName);
-      /* 
-       * Add the PropertyInfo for the property name in a new list since this property name might
-       * not be unique.
-       */
+    if (!this.renameMap.get(propName)) {
       this.renameMap.set(propName, [value]);
-      this.prevNameMap.set(lhsType, newPropName);
+    } else {
+      var arr = this.renameMap.get(propName);
+      this.renameMap.set(propName, arr.push(value));
     }
+    this.updateLastRename(lhsType, newPropName);
   }
 
-  addNewLHSExpression(key: string): void {
+  /* Update the last renamed property for the lhs expression */
+  updateLastRename(key: string, rename: string): void {
+    this.prevNameMap.set(key, rename);
+  }
+
+  getLastRename(key: string): string {
     /*
      * This LHS expression does not exist yet. Add it to the prevNameMap.
      */
@@ -349,7 +340,10 @@ export class Renamer {
       /* Set initial last property name to '' so 'a' can be generated correctly since
        * generateNextLateralPropertyName is based on the most recently generated name.
        */
-      prevNameMap.set(key, '');
+      this.prevNameMap.set(key, '');
+      return '';
+    } else {
+      return this.prevNameMap.get(key);
     }
   }
 }
