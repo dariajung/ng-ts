@@ -8,6 +8,9 @@ var path = require('path');
 
 /* TranspilerOptions Class will go here */
 
+/* Holds information about a property added to the rename map. 
+ * Should this also have a field for the property's type?
+ */
 class PropertyInfo {
   private lhs: string;
   private newName: string;
@@ -32,15 +35,15 @@ export class Renamer {
   private currentFile: ts.SourceFile;
 
   /* 
-   * List of properties, and their remappings. Property has what type its parent is (left hand side
-   * expression) and its new name. 
+   * List of properties, and their remappings. Key is the property name, value is a PropertyInfo 
+   * object which has what type its parent is (left hand side expression) and its new name. 
    */
   renameMap = new Map();
   /* 
    * List of "root" names, and the last property name assigned to one of its properties.
    * ie: Foo is a class. Foo has properties x, y, z which were renamed to a, b, c. 
    * { Foo: 'c' } allows easy access to Foo's last renamed property so we can use 
-   * getNextLateralPropertyName per Class, not globally. 
+   * getNextLateralPropertyName per Class/"root".
    */
   prevNameMap = new Map();
 
@@ -108,8 +111,6 @@ export class Renamer {
     return {
       getSourceFile: (sourceName, languageVersion) => {
         if (fileMap.hasOwnProperty(sourceName)) {
-          console.log('hello?');
-          console.log(sourceName);
           var contents = fs.readFileSync(sourceName, 'UTF-8');
           console.log("==========================================================");
           console.log(contents);
@@ -146,10 +147,12 @@ export class Renamer {
     function traverse(node: ts.Node, typeChecker: ts.TypeChecker, renameMap, pString: string) {
       switch (node.kind) {
         case ts.SyntaxKind.ClassDeclaration:
-          var classDeclaration = <ts.ClassDeclaration>node;
-          pString = updateParentString(pString, classDeclaration.name.text);
+          var cd = <ts.ClassDeclaration>node;
+          pString = updateParentString(pString, cd.name.text);
+          /* This returns undefined, but not really necessary to try to get the "type" of a Class */
+          /* var symbol = typeChecker.getSymbolAtLocation(cd); */
+          console.log(cd);
           console.log('ClassDeclaration');
-          // console.log(classDeclaration);
           break;
         case ts.SyntaxKind.PropertyAssignment:
           break;
@@ -158,8 +161,8 @@ export class Renamer {
           console.log('PropertyDeclaration ' + 'parent: ' + pString);
           var pd = <ts.PropertyDeclaration>node;
           pString = updateParentString(pString, pd.name.text);
-          //console.log("type ");
-          //getType(pd.type);
+          /* pd has a property type, pd.type can be passed to the typechecker to get type info */
+          /* getType(pd.type); */
           break;
         case ts.SyntaxKind.Constructor:
           break;
@@ -177,7 +180,6 @@ export class Renamer {
           var pae = <ts.PropertyAccessExpression>node;
           var lhs = pae.expression;
           /* TODO: figure out how to get type of an expression */
-
           if (lhs.text) {
             console.log("PropertyAE lhs.text");
             pString = updateParentString(lhs.text + '$' + pae.name.text, pString);
@@ -246,8 +248,8 @@ export class Renamer {
     return String.fromCharCode(c.charCodeAt(0) + 1);
   }
 
-  /* Returns a string for the new property name */
-  /* 0 -> a, 1 -> b, ... 25 -> z, 26 -> aa , ...*/
+  /* Given the last code, returns a string for the new property name        */
+  /* Ie: given 'a', will return 'b', given 'az', will return 'ba', etc. ... */
   generateNextLateralPropertyName(code: string): string {
     var chars = code.split('');
     console.log(chars);
@@ -288,11 +290,11 @@ export class Renamer {
   }
 
   /* Update the last renamed property for the lhs expression */
-  updateLastRename(key: string, rename: string): void {
+  private updateLastRename(key: string, rename: string): void {
     this.prevNameMap.set(key, rename);
   }
 
-  getLastRename(key: string): string {
+  private getLastRename(key: string): string {
     /*
      * This LHS expression does not exist yet. Add it to the prevNameMap.
      */
