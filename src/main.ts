@@ -94,7 +94,6 @@ export class Renamer {
 
   /* Create a Transpiler Class */
   createCompilerHost(fileNames: string[], options?: ts.CompilerOptions): ts.CompilerHost {
-    // why is this needed? rather, what is the point?
     var fileMap: { [s: string]: boolean } = {};
     fileNames.forEach((f) => fileMap[f] = true); // why?
 
@@ -148,17 +147,9 @@ export class Renamer {
       switch (node.kind) {
         case ts.SyntaxKind.ClassDeclaration:
           var classDeclaration = <ts.ClassDeclaration>node;
-          //parent.push(classDeclaration.name.text);
           pString = updateParentString(pString, classDeclaration.name.text);
           console.log('ClassDeclaration');
-          console.log(classDeclaration);
-          //console.log(classDeclaration.members);
-
-          // for (var mem in classDeclaration.members) {
-          //   var member = classDeclaration.members[mem];
-          //   console.log(member);
-          //   console.log("member.kind " + member.kind);
-          // }
+          // console.log(classDeclaration);
           break;
         case ts.SyntaxKind.PropertyAssignment:
           break;
@@ -167,11 +158,8 @@ export class Renamer {
           console.log('PropertyDeclaration ' + 'parent: ' + pString);
           var pd = <ts.PropertyDeclaration>node;
           pString = updateParentString(pString, pd.name.text);
-          console.log("type ");
-          getType(pd.type);
-
-          //console.log("TODO ADD TO RENAME MAP: " + pString);
-          //renameMap.set(pString, "NOTHING YET");
+          //console.log("type ");
+          //getType(pd.type);
           break;
         case ts.SyntaxKind.Constructor:
           break;
@@ -188,25 +176,23 @@ export class Renamer {
         case ts.SyntaxKind.PropertyAccessExpression:
           var pae = <ts.PropertyAccessExpression>node;
           var lhs = pae.expression;
+          /* TODO: figure out how to get type of an expression */
 
           if (lhs.text) {
             console.log("PropertyAE lhs.text");
-            //parent.push(pae.name.text);
-            //parent.push(lhs.text);
             pString = updateParentString(lhs.text + '$' + pae.name.text, pString);
-            console.log("TODO ADD TO RENAME MAP: " + pString);
-            //renameMap.set(pString, "NOTHING YET");
-            getType(pae);
+            var symbol = typeChecker.getSymbolAtLocation(lhs);
+            getType(symbol.valueDeclaration.type);
           } else if (lhs.expression) {
             console.log("PropertyAE lhs.expression");
             pString = updateParentString(pae.name.text, pString);
-            getType(pae);
+            console.log('==============================================');
+            var symbol = typeChecker.getSymbolAtLocation(lhs);
+            getType(symbol.valueDeclaration.type);
+            console.log('==============================================');
           } else {
             console.log("PropertyAE else");
-            //parent.push(pae.name.text);
             pString = updateParentString(pString, pae.name.text);
-            //console.log("TODO ADD TO RENAME MAP: " + pString);
-            //renameMap.set(pString, "NOTHING YET");
           }
           break;
       }
@@ -216,10 +202,7 @@ export class Renamer {
       });
     }
 
-    //printMap(this.renameMap);
-
     function getType(node: ts.Node): string {
-      // TODO: Add type checking to "top-level" expressions
       try {
         console.log("TYPECHECKER");
         console.log(typeChecker.typeToString(typeChecker.getTypeAtLocation(node)));
@@ -253,29 +236,6 @@ export class Renamer {
       } else {
         return p + '$' + c;
       }
-    }
-
-    /* TODO: Get rid of it or figure out if it's needed */
-    function dfs(node) {
-      console.log(node);
-      if (node.expression) {
-        console.log(node.expression);
-        dfs(node.expression);
-      } else {
-        return node;
-      }
-    }
-
-    /* TODO: Get rid of it or figure out if it's needed */
-    function childrenExist(topNode) {
-      var count = 0;
-      ts.forEachChild(topNode, function(node) {
-        if (node) count++;
-      });
-
-      console.log(count);
-
-      return (count > 0);
     }
   }
 
@@ -337,7 +297,8 @@ export class Renamer {
      * This LHS expression does not exist yet. Add it to the prevNameMap.
      */
     if (!this.prevNameMap.get(key)) {
-      /* Set initial last property name to '' so 'a' can be generated correctly since
+      /* 
+       * Set initial last property name to '' so 'a' can be generated correctly since
        * generateNextLateralPropertyName is based on the most recently generated name.
        */
       this.prevNameMap.set(key, '');
