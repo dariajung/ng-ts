@@ -2,37 +2,23 @@
 ///<reference path="../typings/typescript/typescript.d.ts"/>
 
 import ts = require('typescript');
-var fs = require('fs'); // filesystem module
-var util = require('util');
-var path = require('path');
+import fs = require('fs'); // filesystem module
+import fsx = require('fs-extra');
+import util = require('util');
+import path = require('path');
 
 /* TranspilerOptions Class will go here */
-
-/* Holds information about a property added to the rename map. 
- * Should this also have a field for the property's type?
- */
-class PropertyInfo {
-  private lhs: string;
-  private newName: string;
-
-  constructor(lhs: string, newName: string) {
-    this.lhs = lhs;
-    this.newName = newName;
-  }
-
-  getLHS(): string {
-    return this.lhs;
-  }
-
-  getNewName(): string {
-    return this.newName;
-  }
-}
 
 /* The Transpiler Class */
 export class Renamer {
   private output: string; // for now, what is an output object?
   private currentFile: ts.SourceFile;
+
+  /*
+   * "StupidMode" will rename properties indiscriminantly. If anything is named "foo", it will be
+   * renamed to global new name for "foo".
+   */
+  stupidMode: boolean;
 
   /* 
    * List of properties, and their remappings. Key is the property name, value is a PropertyInfo 
@@ -47,6 +33,7 @@ export class Renamer {
    */
   prevNameMap = new Map();
 
+
   /* Not sure if needed */
   nodes: ts.Node[] = [];
 
@@ -57,33 +44,6 @@ export class Renamer {
   constructor() {
     /* nothing here yet */
   } 
-
-  compile(fileNames: string[], options: ts.CompilerOptions): void {
-    var program = ts.createProgram(fileNames, options);
-    var emitResult = program.emit();
-
-    var allDiagnostics = ts.getPreEmitDiagnostics(program).concat(emitResult.diagnostics);
-
-    allDiagnostics.forEach(diagnostic => {
-      var loc = diagnostic.file.getLineAndCharacterOfPosition(diagnostic.start);
-      var message = ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n');
-      console.log(
-        '${diagnostic.file.fileName} (${loc.line + 1},${loc.character + 1}): ${message}'
-      );
-    });
-
-    var exitCode = emitResult.emitSkipped ? 1 : 0;
-    console.log("Process exiting with code '${exitCode}'.");
-    process.exit(exitCode);
-  }
-
-  /* NoEmitOnError is a bit silly given the current situation */
-  callCompile() {
-    this.compile(process.argv.slice(2), {
-      noEmitOnError: true, noImplicitAny: true,
-      target: ts.ScriptTarget.ES5, module: ts.ModuleKind.CommonJS
-    });
-  }
 
   /* return set options for the compiler */
   getCompilerOptions(): ts.CompilerOptions {
@@ -101,11 +61,13 @@ export class Renamer {
     fileNames.forEach((f) => fileMap[f] = true); // why?
 
     // sanity check that given files actually exist
-    // fileNames.forEach((fpath) => {
-    //  fs.exists(fpath, function(exists) {
-    //      console.log(exists ? "exists" : "nope :(");
-    //  });
-    // });
+    // take this out later.
+    fileNames.forEach((fpath) => {
+      fs.exists(fpath, function(exists) {
+        console.log(fpath);
+        console.log(exists ? "exists\n" : "nope :(\n");
+      });
+    });
 
     /* the methods of a compiler host object */
     return {
@@ -134,9 +96,42 @@ export class Renamer {
     };
   }
 
+  /* TODO: We want to take the filenames and output the 
+   * renamed files in the same directory (for now). Therefore, destination parameter is unneeded. 
+   */
+  transpile(fileNames: string[], destination?: string): void {
+    var host = this.createCompilerHost(fileNames);       
+    // if (destination === undefined) {
+    //   throw new Error('Must have a destination for emitted file');
+    // }
+    // var destinationRoot = destination || '';
+    var program = ts.createProgram(fileNames, this.getCompilerOptions(), host);
+
+    // Only write files that were explicitly passed in.
+    var fileMap: {[s: string]: boolean} = {};
+    fileNames.forEach((f) => fileMap[this.normalizeSlashes(f)] = true);
+
+    this.errors = [];
+    program.getSourceFiles()
+        .filter((sourceFile) => fileMap[sourceFile.fileName])
+        // Do not generate output for .d.ts files.
+        .filter((sourceFile: ts.SourceFile) => !sourceFile.fileName.match(/\.d\.ts$/))
+        .forEach((f: ts.SourceFile) => {
+          /* TODO: Implement translate */
+          /* var renamedCode = this.translate(f); */
+          /* TODO: Implement getOutputPath */
+          var outputFile = this.getOutputPath(f.fileName);
+          //fsx.mkdirsSync(path.dirname(outputFile));
+          fs.writeFileSync(outputFile, "testing");
+        });
+    /* TODO: Implmenent checkForErrors */
+    /* this.checkForErrors(program); */
+  }
+
   /* Walk the AST of the program */
   /* Pass in typechecker instead of program */
   walk(sourcefile: ts.SourceFile, typeChecker: ts.TypeChecker) {
+    this.currentFile = sourcefile;
     var map = this.renameMap;
 
     ts.forEachChild(sourcefile, function(node) {
@@ -151,7 +146,7 @@ export class Renamer {
           pString = updateParentString(pString, cd.name.text);
           /* This returns undefined, but not really necessary to try to get the "type" of a Class */
           /* var symbol = typeChecker.getSymbolAtLocation(cd); */
-          console.log(cd);
+          //console.log(cd);
           console.log('ClassDeclaration');
           break;
         case ts.SyntaxKind.PropertyAssignment:
@@ -178,19 +173,22 @@ export class Renamer {
           break;
         case ts.SyntaxKind.PropertyAccessExpression:
           var pae = <ts.PropertyAccessExpression>node;
+          console.log('==============================================');
           var lhs = pae.expression;
+          console.log(pae);
+          getType(pae);
           /* TODO: figure out how to get type of an expression */
           if (lhs.text) {
             console.log("PropertyAE lhs.text");
             pString = updateParentString(lhs.text + '$' + pae.name.text, pString);
             var symbol = typeChecker.getSymbolAtLocation(lhs);
-            getType(symbol.valueDeclaration.type);
+            //getType(symbol.valueDeclaration.type);
           } else if (lhs.expression) {
             console.log("PropertyAE lhs.expression");
             pString = updateParentString(pae.name.text, pString);
             console.log('==============================================');
             var symbol = typeChecker.getSymbolAtLocation(lhs);
-            getType(symbol.valueDeclaration.type);
+            //getType(symbol.valueDeclaration.type);
             console.log('==============================================');
           } else {
             console.log("PropertyAE else");
@@ -309,15 +307,73 @@ export class Renamer {
       return this.prevNameMap.get(key);
     }
   }
+
+  private normalizeSlashes(path: string) { return path.replace(/\\/g, "/"); }
+
+  getOutputPath(filePath: string): string {
+    var parsedFile = path.parse(filePath);
+    var renamedFile = parsedFile.dir + '/' + parsedFile.name + '-renamed' + parsedFile.ext;
+    return renamedFile;
+  }
+
 }
 
-var renamer = new Renamer();
-var host = renamer.createCompilerHost(['../../test/hello.ts']);
-//console.log('created compiler host');
-var source : ts.SourceFile = host.getSourceFile('../../test/hello.ts', ts.ScriptTarget.ES6);
+/* Holds information about a property added to the rename map. 
+ * Should this also have a field for the property's type?
+ */
+class PropertyInfo {
+  private lhs: string;
+  private newName: string;
 
-// to create the program, the host calls getSourceFile 
-// IF you pass in a host. It's an optional parameter
-var program : ts.Program = 
-  ts.createProgram(['../../test/hello.ts'], renamer.getCompilerOptions());
-renamer.walk(source, program.getTypeChecker());
+  constructor(lhs: string, newName: string) {
+    this.lhs = lhs;
+    this.newName = newName;
+  }
+
+  getLHS(): string {
+    return this.lhs;
+  }
+
+  getNewName(): string {
+    return this.newName;
+  }
+}
+
+class Output {
+  private result: string = '';
+  private column: number = 1;
+  private line: number = 1;
+
+  constructor(/* private currentFile: ts.SourceFile, private relativeFileName: string */) {}
+
+  emit(str: string) {
+    this.emitNoSpace(' ');
+    this.emitNoSpace(str);
+  }
+
+  emitNoSpace(str: string) {
+    this.result += str;
+    for (var i = 0; i < str.length; i++) {
+      if (str[i] === '\n') {
+        this.line++;
+        this.column = 0;
+      } else {
+        this.column++;
+      }
+    }
+  }
+
+  getResult(): string { return this.result; }
+}
+
+// var renamer = new Renamer();
+// var host = renamer.createCompilerHost(['../../test/hello.ts']);
+// console.log('created compiler host');
+// var source : ts.SourceFile = host.getSourceFile('../../test/hello.ts', ts.ScriptTarget.ES6);
+
+// // to create the program, the host calls getSourceFile 
+// // IF you pass in a host. It's an optional parameter
+// var program : ts.Program = 
+//   ts.createProgram(['../../test/hello.ts'], renamer.getCompilerOptions());
+// renamer.walk(source, program.getTypeChecker());
+
