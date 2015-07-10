@@ -1,21 +1,32 @@
 ///<reference path="../typings/node/node.d.ts"/>
 ///<reference path="../typings/typescript/typescript.d.ts"/>
 
-import ts = require('typescript');
-import fs = require('fs'); // filesystem module
-import fsx = require('fs-extra');
-import util = require('util');
-import path = require('path');
+import * as ts from 'typescript';
+import * as fs from 'fs'; // filesystem module
+// import * as fsx from 'fs-extra/';
+import * as util from 'util';
+import * as path from 'path';
 
 /* TranspilerOptions Class will go here */
 
+
+export function ident(n: ts.Node): string {
+  if (n.kind === ts.SyntaxKind.Identifier) return (<ts.Identifier>n).text;
+  if (n.kind === ts.SyntaxKind.QualifiedName) {
+    var qname = (<ts.QualifiedName>n);
+    var leftName = ident(qname.left);
+    if (leftName) return leftName + '.' + ident(qname.right);
+  } /* Not sure what a qualified name is */
+  return null;
+}
+
 /* The Transpiler Class */
 export class Renamer {
-  private output: string; // for now, what is an output object?
+  private output: Output; // string for now, what is an output object?
   private currentFile: ts.SourceFile;
 
   /*
-   * "StupidMode" will rename properties indiscriminantly. If anything is named "foo", it will be
+   * "Stupid Mode" will rename properties indiscriminantly. If anything is named "foo", it will be
    * renamed to global new name for "foo".
    */
   stupidMode: boolean;
@@ -33,6 +44,9 @@ export class Renamer {
    */
   prevNameMap = new Map();
 
+  /* For "stupid mode" */
+  prevName: string = '';
+  
 
   /* Not sure if needed */
   nodes: ts.Node[] = [];
@@ -42,8 +56,14 @@ export class Renamer {
 
 
   constructor() {
+    this.output = new Output();
     /* nothing here yet */
   } 
+
+  emit(s: string) { 
+    console.log('emit called!\n');
+    this.output.emit(s); 
+  }
 
   /* return set options for the compiler */
   getCompilerOptions(): ts.CompilerOptions {
@@ -62,21 +82,18 @@ export class Renamer {
 
     // sanity check that given files actually exist
     // take this out later.
-    fileNames.forEach((fpath) => {
-      fs.exists(fpath, function(exists) {
-        console.log(fpath);
-        console.log(exists ? "exists\n" : "nope :(\n");
-      });
-    });
+    // fileNames.forEach((fpath) => {
+    //   fs.exists(fpath, function(exists) {
+    //     console.log(fpath);
+    //     console.log(exists ? "exists\n" : "nope :(\n");
+    //   });
+    // });
 
     /* the methods of a compiler host object */
     return {
       getSourceFile: (sourceName, languageVersion) => {
         if (fileMap.hasOwnProperty(sourceName)) {
           var contents = fs.readFileSync(sourceName, 'UTF-8');
-          console.log("==========================================================");
-          console.log(contents);
-          console.log("==========================================================");
           return ts.createSourceFile(sourceName, contents, 
               this.getCompilerOptions().target, true);
         } 
@@ -84,7 +101,7 @@ export class Renamer {
           return ts.createSourceFile(sourceName, '', this.getCompilerOptions().target, true);
         return undefined;
       },
-      // these are not used; just exist to satisfy interface?
+      // these are not used; just exist to satisfy interface.
       writeFile: function(name, text, writeByteOrderMark, outputs) {
         fs.writeFile(name, text);
       },
@@ -97,14 +114,11 @@ export class Renamer {
   }
 
   /* TODO: We want to take the filenames and output the 
-   * renamed files in the same directory (for now). Therefore, destination parameter is unneeded. 
+   * renamed files in the same directory (for now). 
+   * Therefore, destination parameter is unneeded. 
    */
   transpile(fileNames: string[], destination?: string): void {
     var host = this.createCompilerHost(fileNames);       
-    // if (destination === undefined) {
-    //   throw new Error('Must have a destination for emitted file');
-    // }
-    // var destinationRoot = destination || '';
     var program = ts.createProgram(fileNames, this.getCompilerOptions(), host);
 
     // Only write files that were explicitly passed in.
@@ -132,110 +146,289 @@ export class Renamer {
   /* Pass in typechecker instead of program */
   walk(sourcefile: ts.SourceFile, typeChecker: ts.TypeChecker) {
     this.currentFile = sourcefile;
-    var map = this.renameMap;
+    this.traverse(sourcefile);
+    this.printMap(this.renameMap);
 
+    var _this = this;
+
+    /* Figure out a different entry point to rename */
     ts.forEachChild(sourcefile, function(node) {
-      traverse(node, typeChecker, map, '');
+      _this.rename(node);
     });
+  }
 
-    /* Somewhat of a misnomer to refer to pString as "parent" */
-    function traverse(node: ts.Node, typeChecker: ts.TypeChecker, renameMap, pString: string) {
-      switch (node.kind) {
-        case ts.SyntaxKind.ClassDeclaration:
-          var cd = <ts.ClassDeclaration>node;
-          pString = updateParentString(pString, cd.name.text);
-          /* This returns undefined, but not really necessary to try to get the "type" of a Class */
-          /* var symbol = typeChecker.getSymbolAtLocation(cd); */
-          //console.log(cd);
-          console.log('ClassDeclaration');
-          break;
-        case ts.SyntaxKind.PropertyAssignment:
-          break;
-        /* This is where we rename the property and add it to the dictionary */
-        case ts.SyntaxKind.PropertyDeclaration:
-          console.log('PropertyDeclaration ' + 'parent: ' + pString);
-          var pd = <ts.PropertyDeclaration>node;
-          pString = updateParentString(pString, pd.name.text);
-          /* pd has a property type, pd.type can be passed to the typechecker to get type info */
-          /* getType(pd.type); */
-          break;
-        case ts.SyntaxKind.Constructor:
-          break;
-        case ts.SyntaxKind.MethodDeclaration:
-          break;
-        case ts.SyntaxKind.ShorthandPropertyAssignment:
-          break;
-        case ts.SyntaxKind.BinaryExpression:
-          break;
-        case ts.SyntaxKind.Identifier:
-          break;
-        case ts.SyntaxKind.DotToken:
-          break;
-        case ts.SyntaxKind.PropertyAccessExpression:
-          var pae = <ts.PropertyAccessExpression>node;
-          console.log('==============================================');
-          var lhs = pae.expression;
-          console.log(pae);
-          getType(pae);
-          /* TODO: figure out how to get type of an expression */
-          if (lhs.text) {
-            console.log("PropertyAE lhs.text");
-            pString = updateParentString(lhs.text + '$' + pae.name.text, pString);
-            var symbol = typeChecker.getSymbolAtLocation(lhs);
-            //getType(symbol.valueDeclaration.type);
-          } else if (lhs.expression) {
-            console.log("PropertyAE lhs.expression");
-            pString = updateParentString(pae.name.text, pString);
-            console.log('==============================================');
-            var symbol = typeChecker.getSymbolAtLocation(lhs);
-            //getType(symbol.valueDeclaration.type);
-            console.log('==============================================');
-          } else {
-            console.log("PropertyAE else");
-            pString = updateParentString(pString, pae.name.text);
-          }
-          break;
+  /* Emitting output */
+  rename(node: ts.Node, indent?: number) {
+    var _this = this;
+    switch (node.kind) {
+      case ts.SyntaxKind.ClassDeclaration:
+        var cd = <ts.ClassDeclaration>node;
+        visitClassLike('class ', cd);
+        break;
+      case ts.SyntaxKind.PropertyAssignment:
+        break;
+      case ts.SyntaxKind.PropertyDeclaration:
+        var pd = <ts.PropertyDeclaration>node;
+        console.log('propertydeclaration!');
+        visitProperty(pd);
+        break;
+      case ts.SyntaxKind.Parameter:
+        var param = <ts.ParameterDeclaration>node;
+        break;
+      case ts.SyntaxKind.Constructor:
+        console.log('constructor!');
+        var constructor = <ts.ConstructorDeclaration>node;
+        visitConstructor(constructor);
+        break;
+      case ts.SyntaxKind.Block:
+        console.log('block!');
+        var block = <ts.Block>node;
+        visitBlock(block);
+        break;
+      case ts.SyntaxKind.ExpressionStatement:
+        console.log('expression statement!');
+        var es = <ts.ExpressionStatement>node;
+        console.log(ts.SyntaxKind[es.expression.kind]);
+        _this.rename(es.expression);
+        break;
+      case ts.SyntaxKind.BinaryExpression:
+        console.log('binary expression!');
+        var be = <ts.BinaryExpression>node;
+        var left = be.left;
+        var operator = be.operatorToken;
+        var right = be.right;
+
+        console.log('left ' +  ts.SyntaxKind[left.kind]);
+        console.log('right ' + ts.SyntaxKind[right.kind])
+             
+        _this.rename(left);
+        _this.emit(operator.getText());
+        _this.rename(right);
+        _this.emit(';\n');
+
+        break;
+      case ts.SyntaxKind.MethodDeclaration:
+        var md = <ts.MethodDeclaration>node;
+        console.log('MethodDeclaration!');
+        // visitFunctionLike(md);
+        break;
+      case ts.SyntaxKind.ShorthandPropertyAssignment:
+        break;
+      /* Always has .text */
+      /* we rename the property and add it to the dictionary */
+      case ts.SyntaxKind.Identifier:
+        var id = <ts.Identifier>node;
+        console.log('identifier!');
+        visitTypeName(id);
+        break;
+      case ts.SyntaxKind.DotToken:
+        _this.emit('.');
+        break;
+      case ts.SyntaxKind.ThisKeyword:
+        _this.emit('this');
+      case ts.SyntaxKind.PropertyAccessExpression:
+        var pae = <ts.PropertyAccessExpression>node;
+        var lhs = pae.expression;
+        var name = pae.name;
+
+        /* Undefined, so break */
+        if (!lhs) {
+          break; 
+        }
+
+        console.log(ts.SyntaxKind[lhs.kind]);
+        _this.rename(lhs);
+        _this.rename(pae.dotToken);
+        _this.rename(name);
+
+        /* TODO: Explore when to put ;\n */
+        if (pae.parent.kind === ts.SyntaxKind.ExpressionStatement) {
+          _this.emit(';\n');
+        }
+
+        break;
+    }
+
+    function visitClassLike(keyword: string, decl: ts.ClassDeclaration) {
+      _this.emit(keyword);
+      visitTypeName(decl.name);
+      _this.emit(' {\n');
+
+      //console.log(decl);
+      decl.members.forEach(function(memb) {
+        //console.log(memb);
+        console.log(memb.kind + ': ' + ts.SyntaxKind[memb.kind]);
+        _this.rename(memb);
+      });
+
+      /* Go through property parameters here, think about public and private properties */
+      /* Visit constructor declaration */
+      /* Method declarations - function-like */
+
+      _this.emit('}\n');
+    }
+
+    function visitConstructor(cd: ts.ConstructorDeclaration) {
+      console.log('visitConstructor');
+
+      //console.log(cd);
+
+      _this.emit('constructor (');
+      var iterations = cd.parameters.length;
+
+      /* VISIT PARAMETERS */
+      /* Keep track when to insert a comma between parameters */
+      for (var i = 0; i < iterations; i++) {
+        var parameters = cd.parameters;
+        var pd = <ts.ParameterDeclaration>parameters[i];
+        _this.rename(pd.name);
+        if (i < iterations - 1) {
+          _this.emit(',');
+        }
       }
 
-      ts.forEachChild(node, function(node) {
-        traverse(node, typeChecker, renameMap, pString);
+      _this.emit(')');
+
+      /* Constructor stuff yay */
+
+      _this.emit('{\n');
+
+      /* Visit body of constructor */
+      _this.rename(cd.body);
+
+      _this.emit('}\n');
+
+      //console.log(cd);
+    }
+
+    function visitTypeName(typeName: ts.EntityName) {
+      if (typeName.kind !== ts.SyntaxKind.Identifier) {
+        _this.rename(typeName);
+        return;
+      }
+      var identifier = ident(typeName);
+      if (_this.renameMap.get(identifier)) {
+        identifier = _this.renameMap.get(identifier);
+      }
+      _this.emit(identifier);
+    }
+        
+
+    /* This can probably also apply to ParameterDeclaration */
+    function visitProperty(pd: ts.PropertyDeclaration) {
+      console.log('visitProperty');
+      _this.rename(pd.name);
+      if (pd.questionToken) {
+        _this.emit('?');
+      }
+      if (pd.type) {
+        var _type = pd.type.getText();
+        _this.emit(': ' + _type);
+      }
+      _this.emit(';\n');
+    }
+
+    function visitBlock(block: ts.Block) {
+      console.log('visitBlock');
+      block.statements.forEach(function(statement) {
+        console.log(ts.SyntaxKind[statement.kind]);
+        _this.rename(statement);
       });
     }
 
-    function getType(node: ts.Node): string {
-      try {
-        console.log("TYPECHECKER");
-        console.log(typeChecker.typeToString(typeChecker.getTypeAtLocation(node)));
-        return typeChecker.typeToString(typeChecker.getTypeAtLocation(node));
-      } catch(error) {
-        console.log("TYPECHECKER ERROR " + error.stack);
-        return "error";
-      }
+    function visitExpression(expression: ts.Expression) {
     }
 
-    function printMap(map: Map<any, any>) {
-      console.log('============ Rename Map ===============');
-      map.forEach(function(value, key) {
-        console.log(key + " = " + value);
-      }, map);
-      console.log('============ Rename Map ===============');
+    function visitStatement(statement: ts.Statement) {
+      console.log('visitStatement');
+      console.log(statement);
     }
 
-    /* Report information when necessary */
-    function report(node: ts.Node, message: string) {
-      var lc = sourcefile.getLineAndCharacterOfPosition(node.getStart());
-      console.log('${sourcefile.fileName} (${lc.line + 1},${lc.character + 1}): ${message}');
+  }
+
+  /* Somewhat of a misnomer to refer to pString as "parent" */
+  /* typeChecker: ts.TypeChecker, pString: string */
+  traverse(node: ts.Node, typeChecker?: ts.TypeChecker, pString?: string) {
+    // console.log(node.kind + ': ' + ts.SyntaxKind[node.kind]);
+    var _this = this;
+    switch (node.kind) {
+      case ts.SyntaxKind.SourceFile:
+        break;
+      case ts.SyntaxKind.ClassDeclaration:
+        var cd = <ts.ClassDeclaration>node;
+        break;
+      case ts.SyntaxKind.PropertyAssignment:
+        break;
+      case ts.SyntaxKind.PropertyDeclaration:
+        var pd = <ts.PropertyDeclaration>node;
+        break;
+      case ts.SyntaxKind.Parameter:
+        var param = <ts.ParameterDeclaration>node;
+        break;
+      case ts.SyntaxKind.Constructor:
+        var constructor = <ts.ConstructorDeclaration>node;
+        break;
+      case ts.SyntaxKind.MethodDeclaration:
+        break;
+      case ts.SyntaxKind.ShorthandPropertyAssignment:
+        break;
+      case ts.SyntaxKind.BinaryExpression:
+        break;
+      /* Always has .text */
+      /* we rename the property and add it to the dictionary */
+      case ts.SyntaxKind.Identifier:
+        var id = <ts.Identifier>node;
+        var enumKind = id.parent.kind;
+        // console.log('gparent: ' + ts.SyntaxKind[id.parent.parent.kind]);
+        // console.log('parent: ' + ts.SyntaxKind[enumKind]);
+        // console.log('id.text ' + id.text);
+        // console.log('=============================');
+        if (id.parent.kind === ts.SyntaxKind.PropertyDeclaration && 
+          id.parent.parent.kind === ts.SyntaxKind.ClassDeclaration) {
+          /* Add to rename map */
+          _this.assignNewPropertyName(id.text);
+        }
+        break;
+      case ts.SyntaxKind.DotToken:
+        break;
+      case ts.SyntaxKind.PropertyAccessExpression:
+        var pae = <ts.PropertyAccessExpression>node;
+        var lhs = pae.expression;
+        break;
     }
 
-    /* Concat the 'parent' and 'child' strings */
-    function updateParentString(p: string, c: string): string {
-      if (p.length === 0) {
-        return c;
-      } else if (c.length === 0) {
-        return p;
-      } else {
-        return p + '$' + c;
-      }
+    ts.forEachChild(node, function(node) {
+      _this.traverse(node);
+    });
+  }
+
+  getType(node: ts.Node, typeChecker: ts.TypeChecker): string {
+    try {
+      console.log("TYPECHECKER");
+      console.log(typeChecker.typeToString(typeChecker.getTypeAtLocation(node)));
+      return typeChecker.typeToString(typeChecker.getTypeAtLocation(node));
+    } catch(error) {
+      console.log("TYPECHECKER ERROR " + error.stack);
+      return "error";
+    }
+  }
+
+  printMap(map: Map<any, any>) {
+    console.log('============ Rename Map ===============');
+    map.forEach(function(value, key) {
+      console.log(key + " = " + value);
+    }, map);
+    console.log('============ Rename Map ===============');
+  }
+
+  /* Concat the 'parent' and 'child' strings */
+  updateParentString(p: string, c: string): string {
+    if (p.length === 0) {
+      return c;
+    } else if (c.length === 0) {
+      return p;
+    } else {
+      return p + '$' + c;
     }
   }
 
@@ -250,8 +443,12 @@ export class Renamer {
   /* Ie: given 'a', will return 'b', given 'az', will return 'ba', etc. ... */
   generateNextLateralPropertyName(code: string): string {
     var chars = code.split('');
-    console.log(chars);
     var len: number = code.length;
+
+    if (len === 0) {
+      return 'a';
+    }
+
     var last: string = chars[len - 1];
 
     /* Grab the next letter using nextChar */
@@ -270,21 +467,31 @@ export class Renamer {
   }  
 
   /* Given a key, assign a generated property shortname */
-  assignNewPropertyName(propName: string, lhsType: string): void {
-    var prevRename = this.getLastRename(lhsType);
-    var newPropName = this.generateNextLateralPropertyName(prevRename);
-    var value = new PropertyInfo(lhsType, newPropName);
-    /* 
-     * Add the PropertyInfo for the property name in a new list since this property name might
-     * not be unique.
-     */
-    if (!this.renameMap.get(propName)) {
-      this.renameMap.set(propName, [value]);
+  assignNewPropertyName(propName: string, lhsType?: string): void {
+
+    if (this.stupidMode) {
+      var newName = this.generateNextLateralPropertyName(this.prevName);
+      if (!this.renameMap.get(propName)) {
+        this.renameMap.set(propName, newName);
+        this.prevName = newName;
+      } // else do nothing, this re-mapping already exists
+
     } else {
-      var arr = this.renameMap.get(propName);
-      this.renameMap.set(propName, arr.push(value));
+      var prevRename = this.getLastRename(lhsType);
+      var newPropName = this.generateNextLateralPropertyName(prevRename);
+      var value = new PropertyInfo(lhsType, newPropName);
+      /* 
+       * Add the PropertyInfo for the property name in a new list since this property name might
+       * not be unique.
+       */
+      if (!this.renameMap.get(propName)) {
+        this.renameMap.set(propName, [value]);
+      } else {
+        var arr = this.renameMap.get(propName);
+        this.renameMap.set(propName, arr.push(value));
+      }
+      this.updateLastRename(lhsType, newPropName);
     }
-    this.updateLastRename(lhsType, newPropName);
   }
 
   /* Update the last renamed property for the lhs expression */
@@ -316,10 +523,16 @@ export class Renamer {
     return renamedFile;
   }
 
+  /* Visibile for debugging */
+  getOutput() {
+    return this.output.getResult();
+  }
+
 }
 
 /* Holds information about a property added to the rename map. 
  * Should this also have a field for the property's type?
+ * This is needed for "smart mode".
  */
 class PropertyInfo {
   private lhs: string;
@@ -343,12 +556,22 @@ class Output {
   private result: string = '';
   private column: number = 1;
   private line: number = 1;
+  private indentSize: number = 2;
 
   constructor(/* private currentFile: ts.SourceFile, private relativeFileName: string */) {}
 
-  emit(str: string) {
-    this.emitNoSpace(' ');
+  emit(str: string, indent?: number) {
+    this.emitIndent(indent);
+    this.emitNoSpace('');
     this.emitNoSpace(str);
+  }
+
+  emitIndent(indent?: number) {
+    if (!indent) return;
+
+    for (var i = 1; i <= indent * this.indentSize; i++) {
+      this.result += ' ';
+    }
   }
 
   emitNoSpace(str: string) {
@@ -366,14 +589,16 @@ class Output {
   getResult(): string { return this.result; }
 }
 
-// var renamer = new Renamer();
-// var host = renamer.createCompilerHost(['../../test/hello.ts']);
-// console.log('created compiler host');
-// var source : ts.SourceFile = host.getSourceFile('../../test/hello.ts', ts.ScriptTarget.ES6);
+var renamer = new Renamer();
+var host = renamer.createCompilerHost(['../../test/hello.ts']);
+var source : ts.SourceFile = host.getSourceFile('../../test/hello.ts', ts.ScriptTarget.ES6);
 
-// // to create the program, the host calls getSourceFile 
-// // IF you pass in a host. It's an optional parameter
-// var program : ts.Program = 
-//   ts.createProgram(['../../test/hello.ts'], renamer.getCompilerOptions());
-// renamer.walk(source, program.getTypeChecker());
+// to create the program, the host calls getSourceFile 
+// IF you pass in a host. It's an optional parameter
+var program : ts.Program = 
+  ts.createProgram(['../../test/hello.ts'], renamer.getCompilerOptions());
+renamer.stupidMode = true;
+renamer.walk(source, program.getTypeChecker());
 
+console.log('===================');
+console.log(renamer.getOutput());
