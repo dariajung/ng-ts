@@ -165,6 +165,41 @@ export class Renamer {
         var cd = <ts.ClassDeclaration>node;
         visitClassLike('class ', cd);
         break;
+      case ts.SyntaxKind.VariableStatement:
+        console.log('Variable Statement');
+        var vs = <ts.VariableStatement>node;
+        _this.rename(vs.declarationList);
+        _this.emit(';\n');
+        break;
+      case ts.SyntaxKind.VariableDeclarationList:
+        // Note from Martin: VariableDeclarationList can only occur as part of a for loop.
+        var varDeclList = <ts.VariableDeclarationList>node;
+        console.log('variable declaration list');
+        /* Visit list of variable declarations */
+        varDeclList.declarations.forEach(function(decl){
+          _this.rename(decl);
+        });
+        break;
+      case ts.SyntaxKind.VariableDeclaration:
+        console.log('variable declaration!');
+        var vd = <ts.VariableDeclaration>node;
+        console.log(vd);
+        _this.emit('var ');
+        _this.rename(vd.name);
+        if (vd.type) {
+          _this.emit(': ' + vd.type.getText());
+        }
+
+        if (vd.initializer) {
+          _this.emit(' = ');
+
+          console.log(vd.initializer.kind + ' ' + ts.SyntaxKind[vd.initializer.kind]);
+
+          /* New Expression */
+          _this.rename(vd.initializer);
+        }
+
+        break;
       case ts.SyntaxKind.PropertyAssignment:
         break;
       case ts.SyntaxKind.PropertyDeclaration:
@@ -185,6 +220,33 @@ export class Renamer {
         var block = <ts.Block>node;
         visitBlock(block);
         break;
+      case ts.SyntaxKind.NewExpression:
+        console.log('new expression');
+        var newExp = <ts.NewExpression>node;
+        //console.log(newExp);
+        
+        var lhs = newExp.expression;
+        var typeArgs = newExp.typeArguments;
+        var args = newExp.arguments;
+
+        _this.emit('new ');
+        _this.rename(lhs);
+        _this.emit('(');
+
+        /* TODO: Differentiate between TypeArgs and Args */
+        /* TODO: Create a 'second-to-last' */
+        var argSize = args.length;
+        args.forEach(function(arg, i) {
+          console.log(arg);
+          _this.rename(arg);
+          if (i < argSize - 1) {
+            _this.emit(', ');
+          }
+        });
+
+        _this.emit(')');
+
+        break;
       case ts.SyntaxKind.ExpressionStatement:
         console.log('expression statement!');
         var es = <ts.ExpressionStatement>node;
@@ -202,15 +264,14 @@ export class Renamer {
         console.log('right ' + ts.SyntaxKind[right.kind])
              
         _this.rename(left);
-        _this.emit(operator.getText());
+        _this.emit(' ' + operator.getText() + ' ');
         _this.rename(right);
-        _this.emit(';\n');
 
         break;
       case ts.SyntaxKind.MethodDeclaration:
         var md = <ts.MethodDeclaration>node;
         console.log('MethodDeclaration!');
-        // visitFunctionLike(md);
+        visitFunctionLike(md);
         break;
       case ts.SyntaxKind.ShorthandPropertyAssignment:
         break;
@@ -226,6 +287,12 @@ export class Renamer {
         break;
       case ts.SyntaxKind.ThisKeyword:
         _this.emit('this');
+        break;
+      case ts.SyntaxKind.StringLiteral:
+        var sl = <ts.StringLiteral>node;
+        console.log('String literal!');
+        _this.emit(sl.getText());
+        break;
       case ts.SyntaxKind.PropertyAccessExpression:
         var pae = <ts.PropertyAccessExpression>node;
         var lhs = pae.expression;
@@ -245,7 +312,16 @@ export class Renamer {
         if (pae.parent.kind === ts.SyntaxKind.ExpressionStatement) {
           _this.emit(';\n');
         }
+        break;
+      case ts.SyntaxKind.ReturnStatement:
+        console.log('Return Statement!');
+        var rs = <ts.ReturnStatement>node;
+        _this.emit('return');
 
+        if (rs.expression) {
+          _this.emit(' ');
+          _this.rename(rs.expression);
+        }
         break;
     }
 
@@ -274,32 +350,33 @@ export class Renamer {
       //console.log(cd);
 
       _this.emit('constructor (');
-      var iterations = cd.parameters.length;
+
+      var params = cd.parameters;
+      var paramsSize = params.length;
 
       /* VISIT PARAMETERS */
+      /* TODO: Abstract this logic to one function. */
       /* Keep track when to insert a comma between parameters */
-      for (var i = 0; i < iterations; i++) {
-        var parameters = cd.parameters;
-        var pd = <ts.ParameterDeclaration>parameters[i];
-        _this.rename(pd.name);
-        if (i < iterations - 1) {
-          _this.emit(',');
-        }
-      }
+      params.forEach(function(param, i) {
+        _this.rename(param.name);
+        if (i < paramsSize - 1) _this.emit(', ');
+      });
 
       _this.emit(')');
 
       /* Constructor stuff yay */
-
       _this.emit('{\n');
 
       /* Visit body of constructor */
       _this.rename(cd.body);
 
       _this.emit('}\n');
-
-      //console.log(cd);
     }
+
+    // function visitVariableDeclaration(varDecl: ts.VariableDeclaration) {
+    //   console.log('visitVariableDeclaration');
+    //   console.log(varDecl);
+    // }
 
     function visitTypeName(typeName: ts.EntityName) {
       if (typeName.kind !== ts.SyntaxKind.Identifier) {
@@ -312,7 +389,63 @@ export class Renamer {
       }
       _this.emit(identifier);
     }
+
+    function visitFunctionLike(fn: ts.FunctionLikeDeclaration, accessor?: string) {
+      console.log('visitFunctionLike');
+      console.log(fn);
+
+      /* TODO: Visit Decorators */
+      /* .... */
+
+      _this.rename(fn.name);
+
+      _this.emit('(');
+
+      /* TODO: Look at Method parameter declaration */
+      /* ... */
+      fn.parameters.forEach(function(param) {
+        _this.rename(param);
+      });
+
+      _this.emit(')');
+
+      /* TODO: Look and see if return type information exists */
+      /* .... */
+
+      _this.emit(' {\n');
+
+      /* visit body of method declaration */
+      console.log("MEOW " + ts.SyntaxKind[fn.body.kind]);
+      _this.rename(fn.body);
+
+      _this.emit('}\n');
         
+      // if (fn.type) {
+      //   if (fn.kind === ts.SyntaxKind.ArrowFunction) {
+      //     // Type is silently dropped for arrow functions, not supported in Dart.
+      //     this.emit('/*');
+      //     this.visit(fn.type);
+      //     this.emit('*/');
+      //   } else {
+      //     this.visit(fn.type);
+      //   }
+      // }
+      // if (accessor) this.emit(accessor);
+      // if (fn.name) this.visit(fn.name);
+      // // Dart does not even allow the parens of an empty param list on getter
+      // if (accessor !== 'get') {
+      //   this.visitParameters(fn.parameters);
+      // } else {
+      //   if (fn.parameters && fn.parameters.length > 0) {
+      //     this.reportError(fn, 'getter should not accept parameters');
+      //   }
+      // }
+      // if (fn.body) {
+      //   this.visit(fn.body);
+      // } else {
+      //   this.emit(';');
+      // }
+    }  
 
     /* This can probably also apply to ParameterDeclaration */
     function visitProperty(pd: ts.PropertyDeclaration) {
@@ -333,6 +466,7 @@ export class Renamer {
       block.statements.forEach(function(statement) {
         console.log(ts.SyntaxKind[statement.kind]);
         _this.rename(statement);
+        _this.emit(';\n');
       });
     }
 
