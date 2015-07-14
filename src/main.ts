@@ -14,7 +14,7 @@ const DEBUG = true;
 export const COMPILER_OPTIONS: ts.CompilerOptions = {
   allowNonTsExtensions: true,
   module: ts.ModuleKind.CommonJS,
-  target: ts.ScriptTarget.ES6,
+  target: ts.ScriptTarget.ES5,
   experimentalDecorators: true
 };
 
@@ -71,12 +71,16 @@ export class Transpiler {
     this.output.emit(s); 
   }
 
+  emitNoSpace(s: string) {
+    this.output.emitNoSpace(s);
+  }
+
   /* return set options for the compiler */
   getCompilerOptions(): ts.CompilerOptions {
     const options: ts.CompilerOptions = {
       allowNonTsExtensions: true,
       module: ts.ModuleKind.CommonJS,
-      target: ts.ScriptTarget.ES6,
+      target: ts.ScriptTarget.ES5,
     };
     return options;
   }
@@ -234,7 +238,6 @@ export class Transpiler {
         _this.emit('(');
 
         /* TODO: Differentiate between TypeArgs and Args */
-        /* TODO: Create a 'second-to-last'? */
         var argSize = args.length;
         args.forEach(function(arg, i) {
           if (DEBUG) console.log(arg);
@@ -532,6 +535,7 @@ export class Transpiler {
         if (DEBUG) console.log('=============================');
 
         /* TODO: Does the grandparent have to be a ClassDeclaration? */
+        /* What about parameter declarations */
         if (id.parent.kind === ts.SyntaxKind.PropertyDeclaration && 
           id.parent.parent.kind === ts.SyntaxKind.ClassDeclaration) {
           /* Add to rename map */

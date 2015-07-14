@@ -43,7 +43,6 @@ describe('basic property renaming', function() {
 	})
 });
 
-
 /* Test for recursive tree walk */
 /* ..... */
 /* ..... */
