@@ -9,7 +9,7 @@ import * as path from 'path';
 
 /* TranspilerOptions Class will go here */
 
-const DEBUG = false;
+const DEBUG = true;
 
 export const COMPILER_OPTIONS: ts.CompilerOptions = {
   allowNonTsExtensions: true,
@@ -28,8 +28,8 @@ export function ident(n: ts.Node): string {
   return null;
 }
 
-/* The Renamer Class */
-export class Renamer {
+/* The Transpiler Class */
+export class Transpiler {
   private output: Output;
   private currentFile: ts.SourceFile;
   private typeChecker: ts.TypeChecker;
@@ -63,7 +63,6 @@ export class Renamer {
   private errors: string[] = [];
 
   constructor() {
-    this.output = new Output();
     /* nothing here yet */
   } 
 
@@ -82,11 +81,7 @@ export class Renamer {
     return options;
   }
 
-  /* 
-   * Create a Transpiler Class.
-   * QUESTION: Why is fileNames a parameter?
-   */
-  createCompilerHost(fileNames: string[]): ts.CompilerHost {
+  createCompilerHost(): ts.CompilerHost {
 
     var defaultLibFileName = ts.getDefaultLibFileName(this.getCompilerOptions());
 
@@ -97,8 +92,9 @@ export class Renamer {
         if (sourceName === defaultLibFileName) {
           path = ts.getDefaultLibFilePath(this.getCompilerOptions());
         }
-        /* file existence sanity check */
+        /* TODO LOOK INTO THIS */
         if (!fs.existsSync(path)) {
+          console.log('path: ' + path);
           if (DEBUG) console.log('DNE :C\n');
           return undefined;
         }
@@ -109,7 +105,7 @@ export class Renamer {
       writeFile: function(name, text, writeByteOrderMark, outputs) {
         fs.writeFile(name, text);
       },
-      getDefaultLibFileName: function() { return "lib.d.ts"; },
+      getDefaultLibFileName: function() { return defaultLibFileName; },
       useCaseSensitiveFileNames: function() { return true; },
       getCanonicalFileName: function(filename) { return filename; },
       getCurrentDirectory: function() { return ""; },
@@ -125,7 +121,7 @@ export class Renamer {
    * TODO: Error checking / Error Reporting 
    */
   transpile(fileNames: string[], destination?: string): void {
-    var host = this.createCompilerHost(fileNames);       
+    var host = this.createCompilerHost();       
     var program = ts.createProgram(fileNames, this.getCompilerOptions(), host);
     var typeChecker = program.getTypeChecker(); /* Where should this happen? */
 
@@ -163,8 +159,13 @@ export class Renamer {
   visit(node: ts.Node, indent?: number) {
     var _this = this;
     switch (node.kind) {
+      case ts.SyntaxKind.ExportKeyword:
+        if (DEBUG) console.log('export keyword');
+        _this.emit('export ');
+        break;
       case ts.SyntaxKind.ClassDeclaration:
         var cd = <ts.ClassDeclaration>node;
+        if (DEBUG) console.log(cd);
         visitClassLike('class ', cd);
         break;
       case ts.SyntaxKind.VariableStatement:
@@ -194,9 +195,7 @@ export class Renamer {
 
         if (vd.initializer) {
           _this.emit(' = ');
-
           if (DEBUG) console.log(vd.initializer.kind + ' ' + ts.SyntaxKind[vd.initializer.kind]);
-
           /* New Expression */
           _this.visit(vd.initializer);
         }
@@ -326,14 +325,31 @@ export class Renamer {
     }
 
     function visitClassLike(keyword: string, decl: ts.ClassDeclaration) {
+
+
+      /* TODO: Visit decorators*/
+      /* ... */
+
+      if (DEBUG) console.log(decl.modifiers);
+      if (decl.modifiers) {
+        decl.modifiers.forEach(function(mod) {
+          _this.visit(mod);
+        });
+      }
+
       _this.emit(keyword);
+
       visitTypeName(decl.name);
+
+      /* TODO: Visit type name */
+      /* .... */
+
       _this.emit(' {\n');
 
       if (DEBUG) console.log(decl);
       decl.members.forEach(function(memb) {
-        if (DEBUG) console.log(memb);
-        if (DEBUG) console.log(memb.kind + ': ' + ts.SyntaxKind[memb.kind]);
+        // if (DEBUG) console.log(memb);
+        // if (DEBUG) console.log(memb.kind + ': ' + ts.SyntaxKind[memb.kind]);
         _this.visit(memb);
       });
 
@@ -372,11 +388,6 @@ export class Renamer {
 
       _this.emit('}\n');
     }
-
-    // function visitVariableDeclaration(varDecl: ts.VariableDeclaration) {
-    //   if (DEBUG) console.log('visitVariableDeclaration');
-    //   if (DEBUG) console.log(varDecl);
-    // }
 
     function visitTypeName(typeName: ts.EntityName) {
       if (typeName.kind !== ts.SyntaxKind.Identifier) {
@@ -758,7 +769,7 @@ class Output {
   getResult(): string { return this.result; }
 }
 
-var renamer = new Renamer();
-renamer.stupidMode = true;  // Figure out a way to set this. 
-renamer.transpile(['../../test/input/basic_greeter.ts']);
+var transpiler = new Transpiler();
+transpiler.stupidMode = true;  // Figure out a way to set this. 
+transpiler.transpile(['../../test/input/basic_greeter.ts']);
 

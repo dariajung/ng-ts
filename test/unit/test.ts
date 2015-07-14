@@ -1,17 +1,17 @@
 /// <reference path="../../typings/mocha/mocha.d.ts"/>
-import {Renamer} from '../../src/main';
+/// <reference path="../typings/chai/chai.d.ts"/>
 
-var assert = require('assert');
+import {Transpiler} from '../../src/main';
+import * as ts from 'typescript';
+import * as assert from 'assert';
+import {expectTranslate, translateSources} from '../test_support';
 
-describe('Hello World', function() {
-	it('The first char of "Hello World" should be "H"', function() {
-			assert.equal('H', "Hello World"[0]);
-	})
-});
+const TEST_DEBUG = false;
 
 describe('Next lateral property name', function() {
 	it('generates the next shortname for a property', function() {
-		var transpiler = new Renamer();
+		var transpiler = new Transpiler();
+		assert.equal(transpiler.generateNextLateralPropertyName(''), 'a');
 		assert.equal(transpiler.generateNextLateralPropertyName('a'), 'b');
 		assert.equal(transpiler.generateNextLateralPropertyName('zz'), 'aaa');
 		assert.equal(transpiler.generateNextLateralPropertyName('ba'), 'bb');
@@ -19,13 +19,30 @@ describe('Next lateral property name', function() {
 });
 
 describe('output paths', function() {
-	it('writes in the path of the original file & generates <original_name>-renamed.ts', function() {
-		var transpiler = new Renamer();
-		console.log(process.cwd());
-		assert.equal(transpiler.getOutputPath('test/hello.ts'), 'test/hello-renamed.ts');
-		assert.notEqual(transpiler.getOutputPath('test/hello.ts'), 'test/renamed.ts');
+	it('writes in the path of the original file & generates <original_name>_renamed.ts', function() {
+		var transpiler = new Transpiler();
+		assert.equal(transpiler.getOutputPath('test/greeter.ts'), 'test/greeter_renamed.ts');
+		assert.notEqual(transpiler.getOutputPath('test/greeter.ts'), 'test/renamed.ts');
 	})
 });
+
+describe('basic property renaming', function() {
+	it('renames a declared property in a property access expression', function() {
+		var input = 
+		`class Greeter {
+			greeting: string;
+			constructor(g) { this.greeting = g; }
+		}`;
+		if (TEST_DEBUG) console.log(input);
+		var output = 'class Greeter {\na: string;\nconstructor (g){\nthis.a = g;\n}\n}\n';
+		if (TEST_DEBUG) console.log(output);
+		if (TEST_DEBUG) console.log('====================');
+		if (TEST_DEBUG) console.log(expectTranslate(input));
+
+		expectTranslate(input).to.equal(output);
+	})
+});
+
 
 /* Test for recursive tree walk */
 /* ..... */
